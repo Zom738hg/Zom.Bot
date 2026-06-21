@@ -25,6 +25,7 @@ bot = commands.Bot(
 
 user_spam = defaultdict(list)
 
+
 # ================= DATABASE =================
 async def init_db():
     async with aiosqlite.connect(DB) as db:
@@ -37,7 +38,7 @@ async def init_db():
         """)
         await db.commit()
 
-# ================= STARTUP =================
+
 @bot.event
 async def setup_hook():
     await init_db()
@@ -48,12 +49,12 @@ async def setup_hook():
 def detect_language(text: str):
     text = text.lower()
 
-    ua_words = ["що", "привіт", "допомога", "вмієш", "як", "дякую"]
-    ru_words = ["что", "привет", "помощь", "умеешь", "как", "спасибо"]
+    ua_words = ["що", "привіт", "вмієш", "дякую", "як", "допомога"]
+    ru_words = ["что", "привет", "умеешь", "спасибо", "как", "помощь"]
 
-    if any(word in text for word in ua_words):
+    if any(w in text for w in ua_words):
         return "ua"
-    if any(word in text for word in ru_words):
+    if any(w in text for w in ru_words):
         return "ru"
     return "en"
 
@@ -65,7 +66,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # ===== message counter =====
+    # ===== DB counter =====
     try:
         async with aiosqlite.connect(DB) as db:
             await db.execute("""
@@ -75,10 +76,10 @@ async def on_message(message):
             DO UPDATE SET messages = messages + 1
             """, (message.author.id,))
             await db.commit()
-    except Exception as e:
-        print(e)
+    except:
+        pass
 
-    # ===== mention replies =====
+    # ================= MENTION LOGIC =================
     if bot.user in message.mentions:
 
         text = message.content.lower()
@@ -95,60 +96,32 @@ async def on_message(message):
 
         spam_count = len(user_spam[message.author.id])
 
-        # ===== what can you do =====
-        if (
-            "what can you do" in text
-            or "що ти вмієш" in text
-            or "что ты умеешь" in text
-        ):
+        # ===== WHAT CAN YOU DO =====
+        if "what can you do" in text or "що ти вмієш" in text or "что ты умеешь" in text:
 
             if language == "ua":
-                reply = (
-                    "Я можу:\n"
-                    "• Рахувати повідомлення\n"
-                    "• Вести рейтинг активності\n"
-                    "• Видавати respect\n"
-                    "• Показувати топ користувачів\n"
-                    "• Відповідати на згадування"
-                )
-
+                reply = "Я вмію: рахувати повідомлення, рейтинг, respect і відповідати."
             elif language == "ru":
-                reply = (
-                    "Я умею:\n"
-                    "• Считать сообщения\n"
-                    "• Вести рейтинг активности\n"
-                    "• Выдавать respect\n"
-                    "• Показывать топ пользователей\n"
-                    "• Отвечать на упоминания"
-                )
-
+                reply = "Я умею: считать сообщения, рейтинг, respect и отвечать."
             else:
-                reply = (
-                    "I can:\n"
-                    "• Track messages\n"
-                    "• Track activity\n"
-                    "• Give respect points\n"
-                    "• Show leaderboards\n"
-                    "• Respond to mentions"
-                )
+                reply = "I can track messages, ranking, respect system and respond."
 
-        # ===== spam mode =====
+        # ===== SPAM MODE =====
         elif spam_count >= 20:
 
             if language == "ua":
                 reply = "СТОПЕ"
             elif language == "ru":
-                reply = "ПОМЕНДЛЕНЕЕ ШАКАЛ ЕБУЧИЙ МЕДЛЕНЕЕ"
+                reply = "ТЫ ЗАЕБАЛ ХВАТИТ СПАМИТЬ"
             else:
                 reply = "You're sending too many messages. Slow down."
 
-        # ===== normal replies =====
+        # ===== NORMAL AI STYLE =====
         else:
-
             replies = {
-                "ua": ["Я тут.", "Слухаю.", "Чим допомогти?", "Так?", "Що треба?"],
-                "ru": ["Я тута.", "чо надо.", "Чо надо?", "Да?", "Чо надо?"],
-                "en": ["I'm here.", "What do you need?", "I'm listening.", "Yes?", "How can I help?"]
+                "ua": ["Я тут.", "Слухаю.", "Чим допомогти?", "Так?"],
+                "ru": ["Я тута.", "Чо надо.", "Чо надо?", "Да?"],
+                "en": ["I'm here.", "Yes?", "What do you need?", "I'm listening."]
             }
 
             reply = random.choice(replies[language])
@@ -169,10 +142,8 @@ class Panel(discord.ui.View):
 
         async with aiosqlite.connect(DB) as db:
             cursor = await db.execute("""
-            SELECT user_id, messages
-            FROM users
-            ORDER BY messages DESC
-            LIMIT 10
+            SELECT user_id, messages FROM users
+            ORDER BY messages DESC LIMIT 10
             """)
             rows = await cursor.fetchall()
 
@@ -183,7 +154,7 @@ class Panel(discord.ui.View):
                 user = await bot.fetch_user(uid)
                 text += f"{i}. {user.name} - {msg}\n"
             except:
-                text += f"{i}. Unknown User - {msg}\n"
+                text += f"{i}. Unknown - {msg}\n"
 
         await interaction.response.send_message(text, ephemeral=True)
 
@@ -192,21 +163,19 @@ class Panel(discord.ui.View):
 
         async with aiosqlite.connect(DB) as db:
             cursor = await db.execute("""
-            SELECT user_id, respect
-            FROM users
-            ORDER BY respect DESC
-            LIMIT 10
+            SELECT user_id, respect FROM users
+            ORDER BY respect DESC LIMIT 10
             """)
             rows = await cursor.fetchall()
 
         text = "TOP RESPECT\n\n"
 
-        for i, (uid, respect) in enumerate(rows, 1):
+        for i, (uid, r) in enumerate(rows, 1):
             try:
                 user = await bot.fetch_user(uid)
-                text += f"{i}. {user.name} - {respect}\n"
+                text += f"{i}. {user.name} - {r}\n"
             except:
-                text += f"{i}. Unknown User - {respect}\n"
+                text += f"{i}. Unknown - {r}\n"
 
         await interaction.response.send_message(text, ephemeral=True)
 
@@ -216,13 +185,15 @@ class Panel(discord.ui.View):
 async def panel(ctx):
     await ctx.send("Dashboard", view=Panel())
 
+
 @bot.command()
 async def help(ctx):
     await ctx.send("""
 COMMANDS:
 !panel - open dashboard
-!respect @user amount - give respect (admin only)
+!respect @user amount - admin only
 """)
+
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -235,10 +206,9 @@ async def respect(ctx, member: discord.Member, amount: int):
         ON CONFLICT(user_id)
         DO UPDATE SET respect = respect + ?
         """, (member.id, amount, amount))
-
         await db.commit()
 
-    await ctx.send(f"{member.mention} received {amount} respect.")
+    await ctx.send(f"{member.mention} got {amount} respect.")
 
 
 # ================= READY =================
