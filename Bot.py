@@ -18,7 +18,7 @@ bot = commands.Bot(
     help_command=None
 )
 
-# ================= SAFE DATABASE INIT =================
+# ================= DATABASE =================
 async def init_db():
     async with aiosqlite.connect(DB) as db:
         await db.execute("""
@@ -28,28 +28,16 @@ async def init_db():
             respect INTEGER DEFAULT 0
         )
         """)
-
-        # 🔥 SAFE MIGRATION (додає тільки якщо нема)
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN messages INTEGER DEFAULT 0")
-        except:
-            pass
-
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN respect INTEGER DEFAULT 0")
-        except:
-            pass
-
         await db.commit()
 
-# ================= SETUP =================
+# ================= STARTUP =================
 @bot.event
 async def setup_hook():
     await init_db()
     await bot.tree.sync()
-    print("Bot ready + DB safe")
+    print("Bot ready + DB initialized")
 
-# ================= SAFE MESSAGE HANDLER =================
+# ================= MESSAGE TRACKING =================
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -58,8 +46,8 @@ async def on_message(message):
     try:
         async with aiosqlite.connect(DB) as db:
             await db.execute("""
-            INSERT INTO users (user_id, messages)
-            VALUES (?, 1)
+            INSERT INTO users (user_id, messages, respect)
+            VALUES (?, 1, 0)
             ON CONFLICT(user_id)
             DO UPDATE SET messages = messages + 1
             """, (message.author.id,))
@@ -86,9 +74,11 @@ class Panel(discord.ui.View):
             rows = await cursor.fetchall()
 
         text = "🏆 TOP MESSAGES:\n"
+
         for i, (uid, msg) in enumerate(rows, 1):
             user = await bot.fetch_user(uid)
-            text += f"{i}. {user.name} - {msg}\n"
+            name = user.name
+            text += f"{i}. {name} - {msg}\n"
 
         await interaction.response.send_message(text, ephemeral=True)
 
@@ -103,9 +93,15 @@ class Panel(discord.ui.View):
             rows = await cursor.fetchall()
 
         text = "⭐ TOP RESPECT:\n"
+
         for i, (uid, r) in enumerate(rows, 1):
             user = await bot.fetch_user(uid)
-            text += f"{i}. {user.name} - {r}\n"
+            name = user.name
+
+            if r < 0:
+                text += f"{i}. {name} - -{abs(r)} points\n"
+            else:
+                text += f"{i}. {name} - {r}\n"
 
         await interaction.response.send_message(text, ephemeral=True)
 
@@ -120,8 +116,8 @@ async def help(ctx):
 📜 COMMANDS:
 !panel - open dashboard
 !topmessages - top users
-!toprespect - respect leaderboard
-!respect @user amount - give respect
+!toprespect - top respect
+!respect @user amount - give respect (admin only)
 """)
 
 @bot.command()
@@ -131,20 +127,20 @@ async def respect(ctx, member: discord.Member, amount: int):
     try:
         async with aiosqlite.connect(DB) as db:
             await db.execute("""
-            INSERT INTO users (user_id, respect)
-            VALUES (?, ?)
+            INSERT INTO users (user_id, messages, respect)
+            VALUES (?, 0, ?)
             ON CONFLICT(user_id)
             DO UPDATE SET respect = respect + ?
             """, (member.id, amount, amount))
             await db.commit()
 
-        await ctx.send(f"⭐ {member.mention} +{amount} respect")
+        await ctx.send(f"⭐ {member.mention} отримав {amount} respect")
 
     except Exception as e:
-        await ctx.send("❌ Error occurred")
         print(e)
+        await ctx.send("❌ Error")
 
-# ================= START =================
+# ================= READY =================
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
