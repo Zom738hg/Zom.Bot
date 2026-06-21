@@ -7,6 +7,7 @@ import random
 import time
 from collections import defaultdict
 
+# ================= SETUP =================
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
@@ -25,7 +26,6 @@ bot = commands.Bot(
 
 user_spam = defaultdict(list)
 
-
 # ================= DATABASE =================
 async def init_db():
     async with aiosqlite.connect(DB) as db:
@@ -38,19 +38,17 @@ async def init_db():
         """)
         await db.commit()
 
-
 @bot.event
 async def setup_hook():
     await init_db()
     print("Database initialized")
 
-
 # ================= LANGUAGE DETECTION =================
 def detect_language(text: str):
     text = text.lower()
 
-    ua_words = ["що", "привіт", "вмієш", "дякую", "як", "допомога"]
-    ru_words = ["что", "привет", "умеешь", "спасибо", "как", "помощь"]
+    ua_words = ["що", "привіт", "вмієш", "дякую", "як", "допомога", "так", "ні", "можливо"]
+    ru_words = ["что", "привет", "умеешь", "спасибо", "как", "помощь", "да", "нет", "возможно"]
 
     if any(w in text for w in ua_words):
         return "ua"
@@ -58,6 +56,17 @@ def detect_language(text: str):
         return "ru"
     return "en"
 
+def detect_yes_no(text: str):
+    text = text.lower()
+
+    if text in ["так", "да", "yes"]:
+        return "yes"
+    if text in ["ні", "нет", "no"]:
+        return "no"
+    if text in ["можливо", "возможно", "maybe"]:
+        return "maybe"
+
+    return None
 
 # ================= MESSAGE EVENT =================
 @bot.event
@@ -79,99 +88,66 @@ async def on_message(message):
     except:
         pass
 
-# ================= MENTION LOGIC =================
-if bot.user in message.mentions:
+    # ===== ONLY MENTIONS =====
+    if bot.user in message.mentions:
 
-    text = message.content.lower()
-    language = detect_language(text)
+        text = message.content.lower()
+        language = detect_language(text)
 
-    now = time.time()
+        now = time.time()
+        user_spam[message.author.id].append(now)
 
-    user_spam[message.author.id].append(now)
+        user_spam[message.author.id] = [
+            t for t in user_spam[message.author.id]
+            if now - t < 30
+        ]
 
-    user_spam[message.author.id] = [
-        t for t in user_spam[message.author.id]
-        if now - t < 30
-    ]
+        spam_count = len(user_spam[message.author.id])
 
-    spam_count = len(user_spam[message.author.id])
-
-    # ================= YES / NO / MAYBE =================
-    yes_words = ["yes", "так", "да", "ага"]
-    no_words = ["no", "ні", "нет", "не"]
-    maybe_words = ["maybe", "можливо", "возможно", "хз"]
-
-    if any(w in text for w in yes_words):
-
-        if language == "ua":
-            reply = "Так "
-        elif language == "ru":
-            reply = "Да "
-        else:
-            reply = "Yes "
-
-    elif any(w in text for w in no_words):
-
-        if language == "ua":
-            reply = "Ні "
-        elif language == "ru":
-            reply = "Нет "
-        else:
-            reply = "No "
-
-    elif any(w in text for w in maybe_words):
-
-        if language == "ua":
-            reply = "Можливо "
-        elif language == "ru":
-            reply = "Возможно "
-        else:
-            reply = "Maybe "
-
-    # ================= WHAT CAN YOU DO =================
-    elif "what can you do" in text or "що ти вмієш" in text or "что ты умеешь" in text:
-
-        if language == "ua":
-            reply = "Я вмію працювати з повідомленнями, рейтингом і respect."
-        elif language == "ru":
-            reply = "Я умею работать с сообщениями, рейтингом и respect."
-        else:
-            reply = "I can handle messages, ranking and respect system."
-
-        # ===== WHAT CAN YOU DO =====
+        # ================= WHAT CAN YOU DO =================
         if "what can you do" in text or "що ти вмієш" in text or "что ты умеешь" in text:
 
             if language == "ua":
-                reply = "Я вмію: рахувати повідомлення, рейтинг, respect і відповідати."
+                reply = "Я вмію: рахувати повідомлення, рейтинг, respect, відповідати, визначати мову."
             elif language == "ru":
-                reply = "Я умею: считать сообщения, рейтинг, respect и отвечать."
+                reply = "Я умею: считать сообщения, рейтинг, respect, отвечать и определять язык."
             else:
-                reply = "I can track messages, ranking, respect system and respond."
+                reply = "I can track messages, ranking, respect system, language detection and replies."
 
-        # ===== SPAM MODE =====
-        elif spam_count >= 20:
-
-            if language == "ua":
-                reply = "СТОПЕ"
-            elif language == "ru":
-                reply = "ТЫ ЗАЕБАЛ ХВАТИТ СПАМИТЬ"
-            else:
-                reply = "You're sending too many messages. Slow down."
-
-        # ===== NORMAL AI STYLE =====
+        # ================= YES / NO / MAYBE =================
         else:
-            replies = {
-                "ua": ["Я тут.", "Слухаю.", "Чим допомогти?", "Так?"],
-                "ru": ["Я тута.", "Чо надо.", "Чо надо?", "Да?"],
-                "en": ["I'm here.", "Yes?", "What do you need?", "I'm listening."]
-            }
+            yn = detect_yes_no(text)
 
-            reply = random.choice(replies[language])
+            if yn == "yes":
+                reply = {"ua": "Так.", "ru": "Да.", "en": "Yes."}[language]
+
+            elif yn == "no":
+                reply = {"ua": "Ні.", "ru": "Нет.", "en": "No."}[language]
+
+            elif yn == "maybe":
+                reply = {"ua": "Можливо.", "ru": "Возможно.", "en": "Maybe."}[language]
+
+            # ================= SPAM MODE =================
+            elif spam_count >= 20:
+                if language == "ua":
+                    reply = "ТИ ЧО СПАМИШ БЛЯХА ЗАСПОКІЙСЯ"
+                elif language == "ru":
+                    reply = "ХВАТИТ СПАМИТЬ БЛЯТЬ"
+                else:
+                    reply = "Stop spamming."
+
+            # ================= NORMAL MODE =================
+            else:
+                replies = {
+                    "ua": ["Я тут.", "Слухаю.", "Так?", "Чим допомогти?"],
+                    "ru": ["Я тутa.", "Слушаю.", "Чо надо?", "Да?"],
+                    "en": ["I'm here.", "Yes?", "What do you need?", "I'm listening."]
+                }
+                reply = random.choice(replies[language])
 
         await message.reply(reply)
 
     await bot.process_commands(message)
-
 
 # ================= PANEL =================
 class Panel(discord.ui.View):
@@ -221,21 +197,14 @@ class Panel(discord.ui.View):
 
         await interaction.response.send_message(text, ephemeral=True)
 
-
 # ================= COMMANDS =================
 @bot.command()
 async def panel(ctx):
     await ctx.send("Dashboard", view=Panel())
 
-
 @bot.command()
 async def help(ctx):
-    await ctx.send("""
-COMMANDS:
-!panel - open dashboard
-!respect @user amount - admin only
-""")
-
+    await ctx.send("Commands: !panel, !respect")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -252,7 +221,6 @@ async def respect(ctx, member: discord.Member, amount: int):
 
     await ctx.send(f"{member.mention} got {amount} respect.")
 
-
 # ================= READY =================
 @bot.event
 async def on_ready():
@@ -260,6 +228,5 @@ async def on_ready():
         activity=discord.Game(name="Ranking System")
     )
     print(f"Logged in as {bot.user}")
-
 
 bot.run(TOKEN)
