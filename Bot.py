@@ -11,12 +11,8 @@ from collections import defaultdict
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
-if not TOKEN:
-    raise ValueError("TOKEN not found in .env")
-
 DB = "stats.db"
 
-# ================= INTENTS (FIXED) =================
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -27,8 +23,9 @@ bot = commands.Bot(
     help_command=None
 )
 
-# ================= SPAM SYSTEM =================
-user_spam = defaultdict(list)
+# ================= SYSTEMS =================
+user_mentions = defaultdict(list)
+rage_users = {}  # user_id -> timestamp (until when angry)
 
 # ================= DATABASE =================
 async def init_db():
@@ -42,70 +39,125 @@ async def init_db():
         """)
         await db.commit()
 
+# ================= START =================
 @bot.event
 async def setup_hook():
     await init_db()
-    print("DB ready")
+    print("Bot ready")
 
-# ================= ON MESSAGE =================
+# ================= MESSAGE HANDLER =================
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # ===== DB MESSAGE COUNT =====
+    user_id = message.author.id
+    now = time.time()
+
+    # ===== DB COUNTER =====
     async with aiosqlite.connect(DB) as db:
         await db.execute("""
         INSERT INTO users (user_id, messages, respect)
         VALUES (?, 1, 0)
         ON CONFLICT(user_id)
         DO UPDATE SET messages = messages + 1
-        """, (message.author.id,))
+        """, (user_id,))
         await db.commit()
 
-    # ===== BOT MENTION SYSTEM =====
+    # ================= CHECK RAGE EXPIRE =================
+    if user_id in rage_users:
+        if now > rage_users[user_id]:
+            del rage_users[user_id]
+
+    # ================= BOT MENTION =================
     if bot.user in message.mentions:
 
         text = message.content.lower()
-        now = time.time()
 
-        user_spam[message.author.id].append(now)
+        # ================= SPAM TRACK =================
+        user_mentions[user_id].append(now)
 
-        # keep last 30 sec
-        user_spam[message.author.id] = [
-            t for t in user_spam[message.author.id] if now - t < 30
+        user_mentions[user_id] = [
+            t for t in user_mentions[user_id] if now - t <= 20
         ]
 
-        spam_count = len(user_spam[message.author.id])
+        count = len(user_mentions[user_id])
 
-        # ===== QUESTION MODE =====
-        if "?" in text:
-            reply = random.choice(["да", "нет", "может"])
-
-        # ===== SPAM MODE =====
-        elif spam_count > 5:
+        # ================= RAGE MODE =================
+        if user_id in rage_users:
             reply = random.choice([
-                "Хватит спамить.",
-                "ЗАТКНИСЬ УЖЕ",
-                "ТЫ ЗАЕБАЛ",
-                "ХВАТИТ БЛЯТЬ",
-                "Я ТЕБЕ НЕ ЧАТ ГПТ Я НЕ БУДУ ТЕРПЕТЬ"
+                "Отстань.",
+                "ты заебал",
+                "хватит",
             ])
 
-        # ===== NORMAL MODE =====
+        # ================= TRIGGER RAGE =================
+        elif count >= 3:
+            rage_users[user_id] = now + 10  # 10 секунд злости
+
+            reply = random.choice([
+                "ТА ТЫ ЗАЕБАЛ",
+                "ХВАТИТ ЕПТ ТВОЮ МАТЬ",
+                "Я ТЕБЕ НЕ БАБКА В ТРАМВАЕ ЧТОБ БЕСИТЬ",
+                "я еду к тебе домой гатов сраку"
+            ])
+
+        # ================= NORMAL =================
         else:
-            reply = random.choice(["да", "нет", "может"])
+            clean_text = text.replace(f"<@{bot.user.id}>", "").strip()
+
+            if "?" in text:
+                reply = random.choice([
+                    "Да",
+                    "Нет",
+                    "Возможно.",
+                    "Я не уверен."
+                ])
+
+            elif clean_text == "":
+                reply = random.choice([
+                    "чо надо",
+                    "Да?",
+                ])
+
+            else:
+                reply = random.choice([
+                    "Говори.",
+                    "Я тута.",
+                    "Чо надо?"
+                ])
 
         await message.reply(reply)
 
     await bot.process_commands(message)
 
+# ================= COMMANDS =================
+@bot.command()
+async def help(ctx):
+    await ctx.send("""
+КОМАНДЫ:
+
+!respect @user amount - выдать уважение (только админы)
+""")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def respect(ctx, member: discord.Member, amount: int):
+
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+        INSERT INTO users (user_id, respect)
+        VALUES (?, ?)
+        ON CONFLICT(user_id)
+        DO UPDATE SET respect = respect + ?
+        """, (member.id, amount, amount))
+        await db.commit()
+
+    await ctx.send(f"Пользователь {member} получил {amount} уважения")
+
 # ================= READY =================
 @bot.event
 async def on_ready():
-    await bot.change_presence(
-        activity=discord.Game(name="AI Bot Running")
-    )
     print(f"Logged in as {bot.user}")
 
 bot.run(TOKEN)
