@@ -25,7 +25,6 @@ help_command=None
 
 user_spam = defaultdict(list)
 
-================= DATABASE =================
 
 async def init_db():
 async with aiosqlite.connect(DB) as db:
@@ -38,14 +37,13 @@ respect INTEGER DEFAULT 0
 """)
 await db.commit()
 
-================= STARTUP =================
 
 @bot.event
 async def setup_hook():
 await init_db()
 print("Database initialized")
 
-================= LANGUAGE =================
+
 
 def detect_language(text: str):
 text = text.lower()
@@ -67,7 +65,7 @@ if any(word in text for word in ru_words):
     return "ru"
 
 return "en"
-================= MESSAGE EVENT =================
+
 
 @bot.event
 async def on_message(message):
@@ -182,7 +180,8 @@ if bot.user in message.mentions:
     await message.reply(reply)
 
 await bot.process_commands(message)
-================= PANEL =================
+
+
 
 class Panel(discord.ui.View):
 
@@ -250,7 +249,8 @@ async def top_respect(self, interaction, button):
         text,
         ephemeral=True
     )
-================= COMMANDS =================
+
+
 
 @bot.command()
 async def panel(ctx):
@@ -286,7 +286,7 @@ async with aiosqlite.connect(DB) as db:
 await ctx.send(
     f"{member.mention} received {amount} respect."
 )
-================= READY =================
+
 
 @bot.event
 async def on_ready():
