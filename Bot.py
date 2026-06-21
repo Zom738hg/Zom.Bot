@@ -86,9 +86,9 @@ async def on_message(message):
         # ================= RAGE MODE =================
         if user_id in rage_users:
             reply = random.choice([
-                "Отстань",
-                "Хватит",
-                "Не пиши мне"
+                "иди нахуй",
+                "заебал",
+                "."
             ])
 
         # ================= TRIGGER RAGE =================
@@ -96,9 +96,9 @@ async def on_message(message):
             rage_users[user_id] = now + 10
 
             reply = random.choice([
-                "ХВАТИТ ПИСАТЬ",
-                "ОТСТАНЬ",
-                "Я ЗАНЯТ"
+                "ТА ТЫ ЗАЕБАЛ",
+                "ЗАВАЛИ ЕБАЛО",
+                "я найду тебя и разобью ебальник. гатовь сраку, мы едем тебя бить публично"
             ])
 
         # ================= NORMAL =================
@@ -114,7 +114,7 @@ async def on_message(message):
 
             elif clean == "":
                 reply = random.choice([
-                    "Я тут",
+                    "Я тута",
                     "Чо надо",
                     "Да?"
                 ])
@@ -123,7 +123,7 @@ async def on_message(message):
                 reply = random.choice([
                     "Говори",
                     "Я слушаю",
-                    "Я тут"
+                    "Я тута"
                 ])
 
     # ================= FIX: NO DOUBLE REPLY =================
