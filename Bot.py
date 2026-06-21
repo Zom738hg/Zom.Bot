@@ -7,15 +7,19 @@ import random
 import time
 from collections import defaultdict
 
+# ================= LOAD TOKEN =================
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
 if not TOKEN:
-    raise ValueError("TOKEN not found!")
+    raise ValueError("TOKEN not found in .env")
 
 DB = "stats.db"
 
-intents = discord.Intents.all()
+# ================= INTENTS (FIXED) =================
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
 
 bot = commands.Bot(
     command_prefix="!",
@@ -43,14 +47,13 @@ async def setup_hook():
     await init_db()
     print("DB ready")
 
-# ================= MAIN LOGIC =================
+# ================= ON MESSAGE =================
 @bot.event
 async def on_message(message):
-
     if message.author.bot:
         return
 
-    # ===== DB counter =====
+    # ===== DB MESSAGE COUNT =====
     async with aiosqlite.connect(DB) as db:
         await db.execute("""
         INSERT INTO users (user_id, messages, respect)
@@ -60,49 +63,38 @@ async def on_message(message):
         """, (message.author.id,))
         await db.commit()
 
-    # ===== BOT MENTION =====
+    # ===== BOT MENTION SYSTEM =====
     if bot.user in message.mentions:
 
         text = message.content.lower()
-
         now = time.time()
 
         user_spam[message.author.id].append(now)
 
         # keep last 30 sec
         user_spam[message.author.id] = [
-            t for t in user_spam[message.author.id]
-            if now - t < 30
+            t for t in user_spam[message.author.id] if now - t < 30
         ]
 
         spam_count = len(user_spam[message.author.id])
 
-        # ================= YES/NO/MAYBE MODE =================
+        # ===== QUESTION MODE =====
         if "?" in text:
+            reply = random.choice(["да", "нет", "может"])
 
-            replies = ["да", "нет", "может"]
-            reply = random.choice(replies)
-
-        # ================= SPAM MODE (AGGRESSIVE) =================
+        # ===== SPAM MODE =====
         elif spam_count > 5:
-
-            insults = [
-                "Эй, ты че, тормоз? Дай мне передохнуть.",
-                "ХВАТИТ СПАМИТЬ, Я НЕ КРУГЛОСУТОЧНЫЙ ЧАТ БЛЯТЬ",
-                "Еще раз напишешь — игнор включу нахуй.",
-                "ДА ТЫ ЗАЕБАЛ СУКА",
-                "Успокойся уже."
-            ]
-
-            reply = random.choice(insults)
-
-        # ================= NORMAL =================
-        else:
             reply = random.choice([
-                "да",
-                "нет",
-                "может"
+                "Хватит спамить.",
+                "ЗАТКНИСЬ УЖЕ",
+                "ТЫ ЗАЕБАЛ",
+                "ХВАТИТ БЛЯТЬ",
+                "Я ТЕБЕ НЕ ЧАТ ГПТ Я НЕ БУДУ ТЕРПЕТЬ"
             ])
+
+        # ===== NORMAL MODE =====
+        else:
+            reply = random.choice(["да", "нет", "может"])
 
         await message.reply(reply)
 
@@ -112,7 +104,7 @@ async def on_message(message):
 @bot.event
 async def on_ready():
     await bot.change_presence(
-        activity=discord.Game(name="Russian AI Bot")
+        activity=discord.Game(name="AI Bot Running")
     )
     print(f"Logged in as {bot.user}")
 
