@@ -79,22 +79,64 @@ async def on_message(message):
     except:
         pass
 
-    # ================= MENTION LOGIC =================
-    if bot.user in message.mentions:
+# ================= MENTION LOGIC =================
+if bot.user in message.mentions:
 
-        text = message.content.lower()
-        language = detect_language(text)
+    text = message.content.lower()
+    language = detect_language(text)
 
-        now = time.time()
+    now = time.time()
 
-        user_spam[message.author.id].append(now)
+    user_spam[message.author.id].append(now)
 
-        user_spam[message.author.id] = [
-            t for t in user_spam[message.author.id]
-            if now - t < 30
-        ]
+    user_spam[message.author.id] = [
+        t for t in user_spam[message.author.id]
+        if now - t < 30
+    ]
 
-        spam_count = len(user_spam[message.author.id])
+    spam_count = len(user_spam[message.author.id])
+
+    # ================= YES / NO / MAYBE =================
+    yes_words = ["yes", "так", "да", "ага"]
+    no_words = ["no", "ні", "нет", "не"]
+    maybe_words = ["maybe", "можливо", "возможно", "хз"]
+
+    if any(w in text for w in yes_words):
+
+        if language == "ua":
+            reply = "Так "
+        elif language == "ru":
+            reply = "Да "
+        else:
+            reply = "Yes "
+
+    elif any(w in text for w in no_words):
+
+        if language == "ua":
+            reply = "Ні "
+        elif language == "ru":
+            reply = "Нет "
+        else:
+            reply = "No "
+
+    elif any(w in text for w in maybe_words):
+
+        if language == "ua":
+            reply = "Можливо "
+        elif language == "ru":
+            reply = "Возможно "
+        else:
+            reply = "Maybe "
+
+    # ================= WHAT CAN YOU DO =================
+    elif "what can you do" in text or "що ти вмієш" in text or "что ты умеешь" in text:
+
+        if language == "ua":
+            reply = "Я вмію працювати з повідомленнями, рейтингом і respect."
+        elif language == "ru":
+            reply = "Я умею работать с сообщениями, рейтингом и respect."
+        else:
+            reply = "I can handle messages, ranking and respect system."
 
         # ===== WHAT CAN YOU DO =====
         if "what can you do" in text or "що ти вмієш" in text or "что ты умеешь" in text:
