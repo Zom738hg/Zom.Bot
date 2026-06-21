@@ -219,4 +219,3 @@ async def on_ready():
 
 # ================= START BOT =================
 bot.run(TOKEN)
-```
