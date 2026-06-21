@@ -25,7 +25,7 @@ bot = commands.Bot(
 
 # ================= SYSTEMS =================
 user_mentions = defaultdict(list)
-rage_users = {}  # user_id -> timestamp (until when angry)
+rage_users = {}
 
 # ================= DATABASE =================
 async def init_db():
@@ -54,7 +54,7 @@ async def on_message(message):
     user_id = message.author.id
     now = time.time()
 
-    # ===== DB COUNTER =====
+    # DB counter
     async with aiosqlite.connect(DB) as db:
         await db.execute("""
         INSERT INTO users (user_id, messages, respect)
@@ -64,17 +64,15 @@ async def on_message(message):
         """, (user_id,))
         await db.commit()
 
-    # ================= CHECK RAGE EXPIRE =================
-    if user_id in rage_users:
-        if now > rage_users[user_id]:
-            del rage_users[user_id]
+    # expire rage after 10 sec
+    if user_id in rage_users and now > rage_users[user_id]:
+        del rage_users[user_id]
 
     # ================= BOT MENTION =================
     if bot.user in message.mentions:
 
         text = message.content.lower()
 
-        # ================= SPAM TRACK =================
         user_mentions[user_id].append(now)
 
         user_mentions[user_id] = [
@@ -87,22 +85,21 @@ async def on_message(message):
         if user_id in rage_users:
             reply = random.choice([
                 "Отстань.",
-                "ты заебал",
-                "хватит",
+                "да ты.",
+                "тихо уже блять.",
+                "."
             ])
 
-        # ================= TRIGGER RAGE =================
         elif count >= 3:
-            rage_users[user_id] = now + 10  # 10 секунд злости
+            rage_users[user_id] = now + 10
 
             reply = random.choice([
-                "ТА ТЫ ЗАЕБАЛ",
-                "ХВАТИТ ЕПТ ТВОЮ МАТЬ",
-                "Я ТЕБЕ НЕ БАБКА В ТРАМВАЕ ЧТОБ БЕСИТЬ",
-                "я еду к тебе домой гатов сраку"
+                "гатов сраку я уже еду к тебе",
+                "Я ТЕБЕ НЕ ПОДЕРЖКА СКАМ САЙТОВ В КОТОРЫХ ПРОДАЮТ РОБУКСЫ",
+                "иди нахуй",
+                "ТЫ ЗАЕБАЛ ХВАТИТ"
             ])
 
-        # ================= NORMAL =================
         else:
             clean_text = text.replace(f"<@{bot.user.id}>", "").strip()
 
@@ -110,34 +107,81 @@ async def on_message(message):
                 reply = random.choice([
                     "Да",
                     "Нет",
-                    "Возможно.",
-                    "Я не уверен."
+                    "Возможно",
+                    "Я не уверен"
                 ])
 
             elif clean_text == "":
                 reply = random.choice([
-                    "чо надо",
-                    "Да?",
+                    "Я тута.",
+                    "Слушаю.",
+                    "Говори.",
+                    "Да?"
                 ])
 
             else:
                 reply = random.choice([
+                    "Я тебя слушаю.",
                     "Говори.",
                     "Я тута.",
-                    "Чо надо?"
+                    "чо надо"
                 ])
 
         await message.reply(reply)
 
     await bot.process_commands(message)
 
+# ================= PANEL =================
+class Panel(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+
+    @discord.ui.button(label="Top Messages", style=discord.ButtonStyle.green)
+    async def top_messages(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        async with aiosqlite.connect(DB) as db:
+            cursor = await db.execute("""
+            SELECT user_id, messages FROM users
+            ORDER BY messages DESC LIMIT 10
+            """)
+            rows = await cursor.fetchall()
+
+        text = "TOP MESSAGES:\n"
+        for i, (uid, msg) in enumerate(rows, 1):
+            user = await bot.fetch_user(uid)
+            text += f"{i}. {user.name} - {msg}\n"
+
+        await interaction.response.send_message(text, ephemeral=True)
+
+    @discord.ui.button(label="Top Respect", style=discord.ButtonStyle.blurple)
+    async def top_respect(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        async with aiosqlite.connect(DB) as db:
+            cursor = await db.execute("""
+            SELECT user_id, respect FROM users
+            ORDER BY respect DESC LIMIT 10
+            """)
+            rows = await cursor.fetchall()
+
+        text = "TOP RESPECT:\n"
+        for i, (uid, r) in enumerate(rows, 1):
+            user = await bot.fetch_user(uid)
+            text += f"{i}. {user.name} - {r}\n"
+
+        await interaction.response.send_message(text, ephemeral=True)
+
 # ================= COMMANDS =================
+@bot.command()
+async def panel(ctx):
+    await ctx.send("PANEL:", view=Panel())
+
 @bot.command()
 async def help(ctx):
     await ctx.send("""
 КОМАНДЫ:
 
-!respect @user amount - выдать уважение (только админы)
+!panel - открыть статистику
+!respect @user amount - выдать respect (только админы)
 """)
 
 @bot.command()
@@ -153,7 +197,7 @@ async def respect(ctx, member: discord.Member, amount: int):
         """, (member.id, amount, amount))
         await db.commit()
 
-    await ctx.send(f"Пользователь {member} получил {amount} уважения")
+    await ctx.send(f"Пользователь {member} получил {amount} respect")
 
 # ================= READY =================
 @bot.event
