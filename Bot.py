@@ -16,7 +16,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # ========== ЗМІНЮЙТЕ МОДЕЛЬ ТІЛЬКИ ТУТА ==========
 # https://openrouter.ai/models для дивіння доступних моделей
-TEXT_MODEL = "openai/gpt-4o-mini"
+TEXT_MODEL = "deepseek/deepseek-v4-flash"
 
 # Альтернативні моделі:
 # TEXT_MODEL = "openai/gpt-4-turbo"
